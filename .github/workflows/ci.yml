@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'milestone/**'
+  pull_request:
+    paths:
+      - '**.hpp'
+      - '**.h'
+      - '**.cc'
+      - '**.cpp'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: [ubuntu-22.04]
+    steps:
+      - name: 'checkout'
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: 'prepare for build - install python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 'prepare for build - install meson and ninja'
+        run: pip install meson ninja
+
+      - name: 'prepare for build - install g++-13'
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: 'compile'
+        run: meson setup build
+        env:
+          CC: g++-13
+
+      - name: 'run all tests'
+        run: meson test -C build/ -v
+
+      - name: 'upload test log if test failed'
+        uses: actions/
+        if: failure()
+        with:
+          name: meson_test_log
+          path: build/meson-logs/testlog.txt
+
