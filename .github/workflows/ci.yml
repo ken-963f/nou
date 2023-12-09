@@ -45,7 +45,7 @@ jobs:
         run: meson test -C build/ -v
 
       - name: 'upload test log if test failed'
-        uses: actions/
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: meson_test_log
