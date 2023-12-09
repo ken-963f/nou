@@ -46,13 +46,6 @@ jobs:
       with:
         submodules: 'recursive'
 
-    - name: 'prepare for build - install g++-13'
-      run: |
-        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-        sudo apt update
-        sudo apt install -y g++-13
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 --slave
-
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
@@ -68,8 +61,19 @@ jobs:
 
     # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
     # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
+    # - name: Autobuild
+    #   uses: github/codeql-action/autobuild@v2
+    - name: Prepare for build - install meson and ninja
+      run: |
+        pip install meson ninja
+
+    - name: Prepare for build - meson setup
+      run: meson setup build
+      env:
+        CC: g++-13
+
+    - name: Build
+      run: meson compile
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
