@@ -30,6 +30,3 @@
 *.exe
 *.out
 *.app
-
-# Directories for cache files
-.cache
