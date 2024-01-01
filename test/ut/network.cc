@@ -1,10 +1,14 @@
 #include "nou/network.hpp"
 
 #include <concepts>
+#include <execution>
 #include <expected>
+#include <string_view>
+#include <tuple>
 #include <type_traits>
 
 #include "boost/ut.hpp"
+#include "nou/concepts/execution_policy.hpp"
 #include "nou/core/error.hpp"
 #include "nou/layer/input_layer.hpp"
 
@@ -32,6 +36,7 @@ struct complete_layer final {
 
   // Public Function
   [[nodiscard]] constexpr auto forward_propagate(
+      const nou::execution_policy auto& policy,
       std::span<const real_type, 1> value) const noexcept -> output_type {
     return value_.transform([value = std::move(value)](auto value_) {
       return std::array{real_type{value[0] + value_}};
@@ -69,6 +74,10 @@ auto main() -> int {
   using namespace boost::ut;
 
   constexpr std::tuple<float, double, long double> test_value = {};
+  constexpr auto policies =
+      std::tuple{std::execution::seq, std::execution::par,
+                 std::execution::unseq, std::execution::par_unseq};
+  constexpr std::string_view error_message = "test";
 
   "default constructor"_test = []<std::floating_point RealType>() {
     static_assert(
@@ -101,7 +110,7 @@ auto main() -> int {
     static_assert(std::get<1>(value2).value() == RealType{2.0});
   } | test_value;
 
-  "predict"_test = []<std::floating_point RealType>() {
+  "predict"_test = [&]<std::floating_point RealType>() {
     constexpr auto input = std::array{RealType{1.0}};
     constexpr auto network =
         nou::network{nou::input_layer<RealType, 1UZ>{},
@@ -110,29 +119,69 @@ auto main() -> int {
     constexpr auto value = network.predict(input);
     static_assert(value.has_value());
     static_assert(value.value() == std::array{RealType{4.0}});
+
+    std::apply(
+        [&network, &input](auto&&... policies) {
+          (
+              [&network, &input](auto&& policy) {
+                auto value = network.predict(policy, input);
+                expect(value.has_value());
+                expect(eq(value.value(), std::array{RealType{4.0}}));
+              }(policies),
+              ...);
+        },
+        policies);
   } | test_value;
 
-  "predict_error"_test = []<std::floating_point RealType>() {
+  "predict_error"_test = [&]<std::floating_point RealType>() {
     constexpr auto input = std::array{RealType{1.0}};
     {
-      constexpr auto network = nou::network{
-          nou::input_layer<RealType, 1UZ>{},
-          mock::complete_layer<RealType, 1UZ, 2UZ>{nou::error{.what = "test"}},
-          mock::complete_layer<RealType, 2UZ, 3UZ>{1.0}};
+      constexpr auto network =
+          nou::network{nou::input_layer<RealType, 1UZ>{},
+                       mock::complete_layer<RealType, 1UZ, 2UZ>{
+                           nou::error{.what = error_message}},
+                       mock::complete_layer<RealType, 2UZ, 3UZ>{1.0}};
       constexpr auto value = network.predict(input);
       static_assert(!value.has_value());
-      static_assert(value.error().what.data() == "test");
+      static_assert(value.error().what == error_message);
       static_assert(value.error().layer_index == 0);
+
+      std::apply(
+          [&](auto&&... policies) {
+            (
+                [&](auto&& policy) {
+                  auto value = network.predict(policy, input);
+                  expect(!value.has_value());
+                  expect(eq(value.error().what, error_message));
+                  expect(eq(value.error().layer_index, 0));
+                }(policies),
+                ...);
+          },
+          policies);
     }
     {
-      constexpr auto network = nou::network{
-          nou::input_layer<RealType, 1UZ>{},
-          mock::complete_layer<RealType, 1UZ, 2UZ>{1.0},
-          mock::complete_layer<RealType, 2UZ, 3UZ>{nou::error{.what = "test"}}};
+      constexpr auto network =
+          nou::network{nou::input_layer<RealType, 1UZ>{},
+                       mock::complete_layer<RealType, 1UZ, 2UZ>{1.0},
+                       mock::complete_layer<RealType, 2UZ, 3UZ>{
+                           nou::error{.what = error_message}}};
       constexpr auto value = network.predict(input);
       static_assert(!value.has_value());
-      static_assert(value.error().what.data() == "test");
+      static_assert(value.error().what == error_message);
       static_assert(value.error().layer_index == 1);
+
+      std::apply(
+          [&](auto&&... policies) {
+            (
+                [&](auto&& policy) {
+                  auto value = network.predict(policy, input);
+                  expect(!value.has_value());
+                  expect(eq(value.error().what, error_message));
+                  expect(eq(value.error().layer_index, 1));
+                }(policies),
+                ...);
+          },
+          policies);
     }
   } | test_value;
 }
