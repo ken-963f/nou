@@ -114,7 +114,7 @@ auto main() -> int {
 
   "predict_error"_test = []<std::floating_point RealType>() {
     constexpr auto input = std::array{RealType{1.0}};
-    [&]() {
+    {
       constexpr auto network = nou::network{
           nou::input_layer<RealType, 1UZ>{},
           mock::complete_layer<RealType, 1UZ, 2UZ>{nou::error{.what = "test"}},
@@ -123,8 +123,8 @@ auto main() -> int {
       static_assert(!value.has_value());
       static_assert(value.error().what.data() == "test");
       static_assert(value.error().layer_index == 0);
-    }();
-    [&]() {
+    }
+    {
       constexpr auto network = nou::network{
           nou::input_layer<RealType, 1UZ>{},
           mock::complete_layer<RealType, 1UZ, 2UZ>{1.0},
@@ -133,6 +133,6 @@ auto main() -> int {
       static_assert(!value.has_value());
       static_assert(value.error().what.data() == "test");
       static_assert(value.error().layer_index == 1);
-    }();
+    }
   } | test_value;
 }
