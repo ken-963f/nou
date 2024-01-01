@@ -1,7 +1,9 @@
 # Network test
 test(
   'ut_network',
-  executable('ut_network', 'network.cc', include_directories: inc_dir, dependencies: test_dep)
+  executable(
+    'ut_network', 'network.cc', include_directories: inc_dir, dependencies: [test_dep, tbb_dep]
+  )
 )
 
 # Layer test

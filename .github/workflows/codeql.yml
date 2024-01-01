@@ -67,10 +67,15 @@ jobs:
       run: |
         pip install meson ninja
 
+    - name: 'prepare for build - install g++-13'
+      run: |
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+
+    - name: Prepare for build - install tbb
+      run: sudo apt install libtbb-dev
+
     - name: Prepare for build - meson setup
       run: meson setup build
-      env:
-        CC: g++-13
 
     - name: Build
       run: meson compile -C build
