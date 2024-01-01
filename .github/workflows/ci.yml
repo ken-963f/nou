@@ -38,7 +38,7 @@ jobs:
           sudo apt install -y g++-13
 
       - name: 'prepare for build - install tbb'
-        run: sudo apt install intel-tbb
+        run: sudo apt install libtbb-dev
 
       - name: 'compile'
         run: meson setup build

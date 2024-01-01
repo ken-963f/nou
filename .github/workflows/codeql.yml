@@ -68,7 +68,7 @@ jobs:
         pip install meson ninja
 
     - name: Prepare for build - install tbb
-      run: sudo apt install intel-tbb
+      run: sudo apt install libtbb-dev
 
     - name: Prepare for build - meson setup
       run: meson setup build
