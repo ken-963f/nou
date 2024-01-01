@@ -67,6 +67,9 @@ jobs:
       run: |
         pip install meson ninja
 
+    - name: Prepare for build - install onetbb
+      run: sudo apt install onetbb
+
     - name: Prepare for build - meson setup
       run: meson setup build
       env:

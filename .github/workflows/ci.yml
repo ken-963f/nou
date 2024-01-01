@@ -37,6 +37,9 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
+      - name: 'prepare for build - install onetbb'
+        run: sudo apt install onetbb
+
       - name: 'compile'
         run: meson setup build
         env:
