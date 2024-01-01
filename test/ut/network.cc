@@ -10,7 +10,6 @@
 
 #include "boost/ut.hpp"
 #include "nou/concepts/execution_policy.hpp"
-#include "nou/concepts/metric.hpp"
 #include "nou/core/error.hpp"
 #include "nou/layer/input_layer.hpp"
 
