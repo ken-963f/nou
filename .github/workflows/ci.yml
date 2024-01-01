@@ -37,8 +37,8 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
-      - name: 'prepare for build - install onetbb'
-        run: sudo apt install onetbb
+      - name: 'prepare for build - install tbb'
+        run: sudo apt install intel-tbb
 
       - name: 'compile'
         run: meson setup build
