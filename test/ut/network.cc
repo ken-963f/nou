@@ -3,6 +3,7 @@
 #include <concepts>
 #include <execution>
 #include <expected>
+#include <ranges>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -65,6 +66,14 @@ struct incomplete_layer final {
   constexpr auto make_complete_layer() noexcept {
     return complete_layer<typename PrevLayer::real_type, PrevLayer::output_size,
                           OutputSize>{};
+  }
+};
+
+struct metric final {
+  template <std::ranges::random_access_range Output,
+            std::ranges::random_access_range Teacher>
+  constexpr auto operator()(Output&& output, Teacher&& teacher) const {
+    return output[0] - teacher[0];
   }
 };
 
@@ -182,6 +191,76 @@ auto main() -> int {
                 ...);
           },
           policies);
+    }
+  } | test_value;
+
+  "evaluate"_test = [&]<std::floating_point RealType>() {
+    constexpr auto input = std::array{RealType{1.0}};
+    constexpr auto teacher = std::array{RealType{5.0}, RealType{}, RealType{}};
+    constexpr mock::metric metric{};
+    constexpr auto network =
+        nou::network{nou::input_layer<RealType, 1UZ>{},
+                     mock::complete_layer<RealType, 1UZ, 2UZ>{1.0},
+                     mock::complete_layer<RealType, 2UZ, 3UZ>{2.0}};
+
+    "sequenced execution"_test = [&]() {
+      constexpr auto value = network.evaluate(input, teacher, metric);
+      static_assert(value.has_value());
+      static_assert(value.value() == RealType{4.0 - 5.0});
+    };
+
+    "parallel execution"_test = [&](auto&& policy) {
+      auto value = network.evaluate(policy, input, teacher, metric);
+      expect(value.has_value());
+      expect(eq(value.value(), RealType{4.0 - 5.0}));
+    } | policies;
+  } | test_value;
+
+  "evaluate error"_test = [&]<std::floating_point RealType>() {
+    constexpr auto input = std::array{RealType{1.0}};
+    constexpr auto teacher = std::array{RealType{5.0}, RealType{}, RealType{}};
+    constexpr mock::metric metric{};
+    {
+      constexpr auto network =
+          nou::network{nou::input_layer<RealType, 1UZ>{},
+                       mock::complete_layer<RealType, 1UZ, 2UZ>{
+                           nou::error{.what = error_message}},
+                       mock::complete_layer<RealType, 2UZ, 3UZ>{2.0}};
+
+      "sequenced execution"_test = [&]() {
+        constexpr auto value = network.evaluate(input, teacher, metric);
+        static_assert(!value.has_value());
+        static_assert(value.error().what == error_message);
+        static_assert(value.error().layer_index == 0);
+      };
+
+      "parallel execution"_test = [&](auto&& policy) {
+        auto value = network.evaluate(policy, input, teacher, metric);
+        expect(!value.has_value());
+        expect(eq(value.error().what, error_message));
+        expect(eq(value.error().layer_index, 0));
+      } | policies;
+    }
+    {
+      constexpr auto network =
+          nou::network{nou::input_layer<RealType, 1UZ>{},
+                       mock::complete_layer<RealType, 1UZ, 2UZ>{1.0},
+                       mock::complete_layer<RealType, 2UZ, 3UZ>{
+                           nou::error{.what = error_message}}};
+
+      "sequenced execution"_test = [&]() {
+        constexpr auto value = network.evaluate(input, teacher, metric);
+        static_assert(!value.has_value());
+        static_assert(value.error().what == error_message);
+        static_assert(value.error().layer_index == 1);
+      };
+
+      "parallel execution"_test = [&](auto&& policy) {
+        auto value = network.evaluate(policy, input, teacher, metric);
+        expect(!value.has_value());
+        expect(eq(value.error().what, error_message));
+        expect(eq(value.error().layer_index, 1));
+      } | policies;
     }
   } | test_value;
 }

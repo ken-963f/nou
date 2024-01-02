@@ -2,13 +2,16 @@
 
 #include <concepts>
 #include <cstddef>
+#include <expected>
 #include <ranges>
 #include <span>
 #include <tuple>
 #include <type_traits>
 
+#include "concepts/metric.hpp"
 #include "nou/concepts/execution_policy.hpp"
 #include "nou/concepts/layer.hpp"
+#include "nou/core/error.hpp"
 #include "nou/layer/input_layer.hpp"
 #include "nou/utility/connect_layers.hpp"
 
@@ -41,9 +44,11 @@ class network final {
       typename layer_type<std::tuple_size_v<layers_type> - 1>::output_type;
 
   // Static Member
-  static constexpr size_type input_size = InputLayer::input_size;
   static constexpr size_type last_layer_index =
       std::tuple_size_v<layers_type> - 1;
+  static constexpr size_type input_size = InputLayer::input_size;
+  static constexpr size_type output_size =
+      layer_type<last_layer_index>::output_size;
 
   // Constructor
   network() = default;
@@ -62,6 +67,33 @@ class network final {
   [[nodiscard]] constexpr auto predict(
       std::span<const real_type, input_size> input) const -> output_type {
     return predict<0>(std::execution::seq, std::move(input));
+  }
+
+  template <metric<typename output_type::value_type> Metric>
+  [[nodiscard]] auto evaluate(const execution_policy auto& policy,
+                              std::span<const real_type, input_size> input,
+                              std::span<const real_type, output_size> teacher,
+                              Metric&& metric) const
+      -> std::expected<real_type, error> {
+    output_type output = predict(policy, std::move(input));
+    return std::move(output).transform(
+        [metric = std::forward<Metric>(metric),
+         teacher = std::move(teacher)]<class T>(T&& output) {
+          return metric(std::forward<T>(output), teacher);
+        });
+  }
+
+  template <metric<typename output_type::value_type> Metric>
+  [[nodiscard]] constexpr auto evaluate(
+      std::span<const real_type, input_size> input,
+      std::span<const real_type, output_size> teacher, Metric&& metric) const
+      -> std::expected<real_type, error> {
+    output_type output = predict(std::move(input));
+    return std::move(output).transform(
+        [metric = std::forward<Metric>(metric),
+         teacher = std::move(teacher)]<class T>(T&& output) {
+          return metric(std::forward<T>(output), teacher);
+        });
   }
 
   // Getter/Setter
