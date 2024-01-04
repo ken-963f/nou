@@ -339,7 +339,8 @@ auto main() -> int {
                                         nou::network(network)](auto&& policy) {
       auto [value1, value2] = [&]() {
         auto network1 = nou::network(network);
-        auto value1 = network1.fit(input, teacher, loss_function, metric);
+        auto value1 =
+            network1.fit(policy, input, teacher, loss_function, metric);
         auto value2 = network1.value();
         return std::tuple{value1, value2};
       }();
@@ -386,7 +387,8 @@ auto main() -> int {
                                       auto&& policy) {
         auto [value1, value2] = [&]() {
           auto network1 = nou::network(network);
-          auto value1 = network1.fit(input, teacher, loss_function, metric);
+          auto value1 =
+              network1.fit(policy, input, teacher, loss_function, metric);
           auto value2 = network1.value();
           return std::tuple{value1, value2};
         }();
@@ -427,7 +429,8 @@ auto main() -> int {
                                       auto&& policy) {
         auto [value1, value2] = [&]() {
           auto network1 = nou::network(network);
-          auto value1 = network1.fit(input, teacher, loss_function, metric);
+          auto value1 =
+              network1.fit(policy, input, teacher, loss_function, metric);
           auto value2 = network1.value();
           return std::tuple{value1, value2};
         }();

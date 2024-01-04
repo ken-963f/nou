@@ -111,7 +111,7 @@ class network final {
            teacher_type teacher, LossFunction&& loss_function, Metric&& metric)
       -> std::expected<real_type, error> {
     real_type result{};
-    constexpr auto metric_function =
+    auto metric_function =
         [&result, metic = std::forward<Metric>(metric)]<class T, class U>(
             T&& output, U&& teacher) {
           result = metic(std::forward<T>(output), std::forward<U>(teacher));
