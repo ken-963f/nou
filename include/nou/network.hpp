@@ -3,7 +3,6 @@
 #include <concepts>
 #include <cstddef>
 #include <expected>
-#include <optional>
 #include <ranges>
 #include <span>
 #include <tuple>
