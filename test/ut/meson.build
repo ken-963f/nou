@@ -16,8 +16,16 @@ test(
 
 # Utility test
 test(
+  'ut_algorithm',
+  executable(
+    'ut_algorithm', 'utility/algorithm.cc', include_directories: inc_dir, dependencies: [test_dep, tbb_dep]
+  )
+)
+
+test(
   'ut_connect_layers',
   executable(
     'ut_connect_layers', 'utility/connect_layers.cc', include_directories: inc_dir, dependencies: test_dep
   )
 )
+
