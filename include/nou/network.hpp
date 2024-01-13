@@ -184,7 +184,7 @@ class network final {
       return transform_error_<I>(result);
     } else {
       return transform_error_<I>(std::move(result))
-          .and_then([&, this]<class T>(T&& value) {
+          .and_then([&]<class T>(T&& value) {
             return predict_<I + 1>(policy, std::forward<T>(value));
           });
     }
@@ -213,11 +213,11 @@ class network final {
       const training_data_set<BatchInput, BatchTeacher, F>& data_set,
       LossFunction loss_function, Metric metric, Callback& callback,
       size_type epoch) {
-    std::ranges::for_each(std::views::iota(0UZ, epoch), [&, this](auto index) {
-      for_each(policy, data_set.training_data(), [&, this](auto&& batch) {
+    std::ranges::for_each(std::views::iota(0UZ, epoch), [&](auto index) {
+      for_each(policy, data_set.training_data(), [&](auto&& batch) {
         auto result = transform_reduce(
             policy, batch, real_type{}, std::plus<real_type>{},
-            [&, this](auto&& data) {
+            [&](auto&& data) {
               const auto& [input, teacher] = data;
               real_type result{};
               auto metric_function = [&]<class T, class U>(T&& output,
@@ -249,7 +249,7 @@ class network final {
                       Metric&& metric) const {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
-    return std::move(output).and_then([&, this]<class T>(T&& output) {
+    return std::move(output).and_then([&]<class T>(T&& output) {
       return fit_<I + 1>(policy, std::forward<T>(output), std::move(teacher),
                          std::forward<LossFunction>(loss_function),
                          std::forward<Metric>(metric));
@@ -265,7 +265,7 @@ class network final {
                       Metric&& metric) {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
-    auto loss = output.and_then([&, this]<class T>(T& output) {
+    auto loss = output.and_then([&]<class T>(T& output) {
       return fit_<I + 1>(policy, output, std::move(teacher),
                          std::forward<LossFunction>(loss_function),
                          std::forward<Metric>(metric));
@@ -285,7 +285,7 @@ class network final {
                       Metric&& metric) {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
-    auto loss = output.and_then([&, this]<class T>(T& output) {
+    auto loss = output.and_then([&]<class T>(T& output) {
       return fit_<I + 1>(policy, output, std::move(teacher),
                          std::forward<LossFunction>(loss_function),
                          std::forward<Metric>(metric));
@@ -293,7 +293,7 @@ class network final {
     if (optimizable<layer_type<I>> && loss.has_value()) {
       layer<I>().add_gradient(policy, output.value(), loss.value());
     }
-    return std::move(loss).and_then([&, this]<class T>(T&& loss) {
+    return std::move(loss).and_then([&]<class T>(T&& loss) {
       return transform_error_<I>(layer<I>().backward_propagate(
           policy, std::move(output.value()), std::forward<T>(loss)));
     });
@@ -313,7 +313,7 @@ class network final {
       std::forward<Metric>(metric)(output.value(), teacher);
     }
 
-    auto loss = output.transform([&, this](auto& output) {
+    auto loss = output.transform([&](auto& output) {
       typename layer_type<I>::output_type loss{};
       transform(policy, output, std::move(teacher), loss.begin(),
                 [loss_function = std::forward<LossFunction>(loss_function)](
@@ -327,7 +327,7 @@ class network final {
       layer<I>().add_gradient(policy, output.value(), loss.value());
     }
 
-    return std::move(loss).and_then([&, this]<class T>(T&& loss) {
+    return std::move(loss).and_then([&]<class T>(T&& loss) {
       return transform_error_<I>(layer<I>().backward_propagate(
           policy, std::move(output.value()), std::forward<T>(loss)));
     });
@@ -338,7 +338,7 @@ class network final {
     auto func_array = [this]<size_type... I>(std::index_sequence<I...>) {
       return std::array{apply_gradient_function_<I, P>...};
     }(std::make_index_sequence<last_layer_index + 1>{});
-    for_each(policy, func_array, [&, this](auto func) { func(*this, policy); });
+    for_each(policy, func_array, [&](auto func) { func(*this, policy); });
   }
 
   template <size_type I, class T>
