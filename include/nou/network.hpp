@@ -79,79 +79,32 @@ class network final {
       : layers_{connect_layers(input_layer, std::forward<Layers>(layers)...)} {}
 
   // Public Functions
-  [[nodiscard]] auto predict(const execution_policy auto& policy,
-                             std::span<const real_type, input_size> input) const
+  [[nodiscard]] constexpr auto predict(input_type input) const
       -> std::expected<output_type, error> {
-    return predict<0>(policy, std::move(input));
+    return predict_<0>(std::execution::seq, std::move(input));
   }
 
-  [[nodiscard]] constexpr auto predict(
-      std::span<const real_type, input_size> input) const
+  [[nodiscard]] auto predict(const execution_policy auto& policy,
+                             input_type input) const
       -> std::expected<output_type, error> {
-    return predict<0>(std::execution::seq, std::move(input));
+    return predict_<0>(policy, std::move(input));
+  }
+
+  template <metric<output_type> Metric>
+  [[nodiscard]] constexpr auto evaluate(input_type input, teacher_type teacher,
+                                        Metric&& metric) const
+      -> std::expected<real_type, error> {
+    return evaluate_(std::execution::seq, std::move(input), std::move(teacher),
+                     std::forward<Metric>(metric));
   }
 
   template <metric<output_type> Metric>
   [[nodiscard]] auto evaluate(const execution_policy auto& policy,
-                              std::span<const real_type, input_size> input,
-                              teacher_type teacher, Metric&& metric) const
+                              input_type input, teacher_type teacher,
+                              Metric&& metric) const
       -> std::expected<real_type, error> {
-    auto output = predict(policy, std::move(input));
-    return std::move(output).transform(
-        [metric = std::forward<Metric>(metric),
-         teacher = std::move(teacher)]<class T>(T&& output) {
-          return metric(std::forward<T>(output), teacher);
-        });
-  }
-
-  template <metric<output_type> Metric>
-  [[nodiscard]] constexpr auto evaluate(
-      std::span<const real_type, input_size> input,
-      std::span<const real_type, output_size> teacher, Metric&& metric) const
-      -> std::expected<real_type, error> {
-    auto output = predict(std::move(input));
-    return std::move(output).transform(
-        [metric = std::forward<Metric>(metric),
-         teacher = std::move(teacher)]<class T>(T&& output) {
-          return metric(std::forward<T>(output), teacher);
-        });
-  }
-
-  template <std::ranges::viewable_range BatchInput,
-            std::ranges::viewable_range BatchTeacher,
-            std::invocable<std::size_t, std::size_t> F,
-            loss_function<real_type> LossFunction, metric<output_type> Metric,
-            callback<real_type> Callback>
-  constexpr void fit(
-      const execution_policy auto& policy,
-      const training_data_set<BatchInput, BatchTeacher, F>& data_set,
-      LossFunction loss_function, Metric metric, Callback& callback,
-      size_type epoch) {
-    std::ranges::for_each(std::views::iota(0UZ, epoch), [&, this](auto index) {
-      for_each(policy, data_set.training_data(), [&, this](auto&& batch) {
-        auto result = transform_reduce(
-            policy, batch, real_type{}, std::plus<real_type>{},
-            [&, this](auto&& data) {
-              const auto& [input, teacher] = data;
-              real_type result{};
-              auto metric_function = [&]<class T, class U>(T&& output,
-                                                           U&& teacher) {
-                result =
-                    metric(std::forward<T>(output), std::forward<U>(teacher));
-              };
-              auto fit_result = fit<0>(policy, input.base(), teacher.base(),
-                                       loss_function, metric_function);
-              if (!fit_result.has_value()) [[unlikely]] {
-                callback.on_error(fit_result.error());
-                return real_type{};
-              }
-              return result;
-            });
-        apply_gradient(policy);
-        callback.on_batch_end(std::move(result));
-      });
-      callback.on_epoch_end(index);
-    });
+    return evaluate_(policy, std::move(input), std::move(teacher),
+                     std::forward<Metric>(metric));
   }
 
   template <std::ranges::viewable_range BatchInput,
@@ -163,7 +116,19 @@ class network final {
       const training_data_set<BatchInput, BatchTeacher, F>& data_set,
       LossFunction loss_function, Metric metric, Callback& callback,
       size_type epoch) {
-    fit(std::execution::seq, data_set, loss_function, metric, callback, epoch);
+    fit_(std::execution::seq, data_set, loss_function, metric, callback, epoch);
+  }
+
+  template <std::ranges::viewable_range BatchInput,
+            std::ranges::viewable_range BatchTeacher,
+            std::invocable<std::size_t, std::size_t> F,
+            loss_function<real_type> LossFunction, metric<output_type> Metric,
+            callback<real_type> Callback>
+  void fit(const execution_policy auto& policy,
+           const training_data_set<BatchInput, BatchTeacher, F>& data_set,
+           LossFunction loss_function, Metric metric, Callback& callback,
+           size_type epoch) {
+    fit_(policy, data_set, loss_function, metric, callback, epoch);
   }
 
   // Getter/Setter
@@ -210,50 +175,100 @@ class network final {
   // Private Function
   template <size_type I, std::ranges::random_access_range Input>
     requires(I <= last_layer_index)
-  constexpr auto predict(const execution_policy auto& policy,
-                         Input&& input) const {
+  constexpr auto predict_(const execution_policy auto& policy,
+                          Input&& input) const {
     auto result =
         layer<I>().forward_propagate(policy, std::forward<Input>(input));
 
     if constexpr (I == last_layer_index) {
-      return transform_error<I>(result);
+      return transform_error_<I>(result);
     } else {
-      return transform_error<I>(std::move(result))
-          .and_then([&, this]<std::ranges::random_access_range T>(T&& value) {
-            return predict<I + 1>(policy, std::forward<T>(value));
+      return transform_error_<I>(std::move(result))
+          .and_then([&, this]<class T>(T&& value) {
+            return predict_<I + 1>(policy, std::forward<T>(value));
           });
     }
+  }
+
+  template <metric<output_type> Metric>
+  constexpr auto evaluate_(const execution_policy auto& policy,
+                           input_type input, teacher_type teacher,
+                           Metric&& metric) const
+      -> std::expected<real_type, error> {
+    auto output = predict_<0>(policy, std::move(input));
+    return std::move(output).transform(
+        [metric = std::forward<Metric>(metric),
+         teacher = std::move(teacher)]<class T>(T&& output) {
+          return metric(std::forward<T>(output), teacher);
+        });
+  }
+
+  template <std::ranges::viewable_range BatchInput,
+            std::ranges::viewable_range BatchTeacher,
+            std::invocable<std::size_t, std::size_t> F,
+            loss_function<real_type> LossFunction, metric<output_type> Metric,
+            callback<real_type> Callback>
+  constexpr void fit_(
+      const execution_policy auto& policy,
+      const training_data_set<BatchInput, BatchTeacher, F>& data_set,
+      LossFunction loss_function, Metric metric, Callback& callback,
+      size_type epoch) {
+    std::ranges::for_each(std::views::iota(0UZ, epoch), [&, this](auto index) {
+      for_each(policy, data_set.training_data(), [&, this](auto&& batch) {
+        auto result = transform_reduce(
+            policy, batch, real_type{}, std::plus<real_type>{},
+            [&, this](auto&& data) {
+              const auto& [input, teacher] = data;
+              real_type result{};
+              auto metric_function = [&]<class T, class U>(T&& output,
+                                                           U&& teacher) {
+                result =
+                    metric(std::forward<T>(output), std::forward<U>(teacher));
+              };
+              auto fit_result = fit_<0>(policy, input.base(), teacher.base(),
+                                        loss_function, metric_function);
+              if (!fit_result.has_value()) [[unlikely]] {
+                callback.on_error(fit_result.error());
+                return real_type{};
+              }
+              return result;
+            });
+        apply_gradient_(policy);
+        callback.on_batch_end(std::move(result));
+      });
+      callback.on_epoch_end(index);
+    });
   }
 
   template <size_type I, loss_function<real_type> LossFunction,
             std::invocable<output_type, teacher_type> Metric>
     requires(I < first_optimizable_layer_index)
-  constexpr auto fit(const execution_policy auto& policy,
-                     typename layer_type<I>::input_type input,
-                     teacher_type teacher, LossFunction&& loss_function,
-                     Metric&& metric) const {
-    auto output = transform_error<I>(
+  constexpr auto fit_(const execution_policy auto& policy,
+                      typename layer_type<I>::input_type input,
+                      teacher_type teacher, LossFunction&& loss_function,
+                      Metric&& metric) const {
+    auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
     return std::move(output).and_then([&, this]<class T>(T&& output) {
-      return fit<I + 1>(policy, std::forward<T>(output), std::move(teacher),
-                        std::forward<LossFunction>(loss_function),
-                        std::forward<Metric>(metric));
+      return fit_<I + 1>(policy, std::forward<T>(output), std::move(teacher),
+                         std::forward<LossFunction>(loss_function),
+                         std::forward<Metric>(metric));
     });
   }
 
   template <size_type I, loss_function<real_type> LossFunction,
             std::invocable<output_type, teacher_type> Metric>
     requires(I == first_optimizable_layer_index)
-  constexpr auto fit(const execution_policy auto& policy,
-                     typename layer_type<I>::input_type input,
-                     teacher_type teacher, LossFunction&& loss_function,
-                     Metric&& metric) {
-    auto output = transform_error<I>(
+  constexpr auto fit_(const execution_policy auto& policy,
+                      typename layer_type<I>::input_type input,
+                      teacher_type teacher, LossFunction&& loss_function,
+                      Metric&& metric) {
+    auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
     auto loss = output.and_then([&, this]<class T>(T& output) {
-      return fit<I + 1>(policy, output, std::move(teacher),
-                        std::forward<LossFunction>(loss_function),
-                        std::forward<Metric>(metric));
+      return fit_<I + 1>(policy, output, std::move(teacher),
+                         std::forward<LossFunction>(loss_function),
+                         std::forward<Metric>(metric));
     });
     if (loss.has_value()) {
       layer<I>().add_gradient(policy, std::move(output.value()), loss.value());
@@ -264,22 +279,22 @@ class network final {
   template <size_type I, loss_function<real_type> LossFunction,
             std::invocable<output_type, teacher_type> Metric>
     requires(I > first_optimizable_layer_index && I < last_layer_index)
-  constexpr auto fit(const execution_policy auto& policy,
-                     typename layer_type<I>::input_type input,
-                     teacher_type teacher, LossFunction&& loss_function,
-                     Metric&& metric) {
-    auto output = transform_error<I>(
+  constexpr auto fit_(const execution_policy auto& policy,
+                      typename layer_type<I>::input_type input,
+                      teacher_type teacher, LossFunction&& loss_function,
+                      Metric&& metric) {
+    auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
     auto loss = output.and_then([&, this]<class T>(T& output) {
-      return fit<I + 1>(policy, output, std::move(teacher),
-                        std::forward<LossFunction>(loss_function),
-                        std::forward<Metric>(metric));
+      return fit_<I + 1>(policy, output, std::move(teacher),
+                         std::forward<LossFunction>(loss_function),
+                         std::forward<Metric>(metric));
     });
     if (optimizable<layer_type<I>> && loss.has_value()) {
       layer<I>().add_gradient(policy, output.value(), loss.value());
     }
     return std::move(loss).and_then([&, this]<class T>(T&& loss) {
-      return transform_error<I>(layer<I>().backward_propagate(
+      return transform_error_<I>(layer<I>().backward_propagate(
           policy, std::move(output.value()), std::forward<T>(loss)));
     });
   }
@@ -287,11 +302,11 @@ class network final {
   template <size_type I, loss_function<real_type> LossFunction,
             std::invocable<output_type, teacher_type> Metric>
     requires(I == last_layer_index)
-  constexpr auto fit(const execution_policy auto& policy,
-                     typename layer_type<I>::input_type input,
-                     teacher_type teacher, LossFunction&& loss_function,
-                     Metric&& metric) {
-    auto output = transform_error<I>(
+  constexpr auto fit_(const execution_policy auto& policy,
+                      typename layer_type<I>::input_type input,
+                      teacher_type teacher, LossFunction&& loss_function,
+                      Metric&& metric) {
+    auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
 
     if (output.has_value()) {
@@ -313,13 +328,13 @@ class network final {
     }
 
     return std::move(loss).and_then([&, this]<class T>(T&& loss) {
-      return transform_error<I>(layer<I>().backward_propagate(
+      return transform_error_<I>(layer<I>().backward_propagate(
           policy, std::move(output.value()), std::forward<T>(loss)));
     });
   }
 
   template <execution_policy P>
-  constexpr void apply_gradient(const P& policy) {
+  constexpr void apply_gradient_(const P& policy) {
     auto func_array = [this]<size_type... I>(std::index_sequence<I...>) {
       return std::array{apply_gradient_function_<I, P>...};
     }(std::make_index_sequence<last_layer_index + 1>{});
@@ -329,7 +344,7 @@ class network final {
   template <size_type I, class T>
     requires(I <= last_layer_index) &&
             std::same_as<error, typename std::remove_cvref_t<T>::error_type>
-  constexpr auto transform_error(T&& error) const noexcept {
+  constexpr auto transform_error_(T&& error) const noexcept {
     return std::forward<T>(error).transform_error([]<class U>(U&& error) {
       error.layer_index = I;
       return std::forward<U>(error);
