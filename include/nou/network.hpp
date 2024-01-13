@@ -197,8 +197,8 @@ class network final {
                            Metric metric) const
       -> std::expected<real_type, error> {
     auto output = predict_<0>(policy, std::move(input));
-    return std::move(output).transform([=]<class T>(T&& output) {
-      return metric(std::forward<T>(output), teacher);
+    return std::move(output).transform([&]<class T>(T&& output) {
+      return metric(std::forward<T>(output), std::move(teacher));
     });
   }
 
