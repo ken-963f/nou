@@ -16,13 +16,14 @@ namespace detail {
 
 template <complete_layer PrevLayer, complete_layer Layer>
   requires connectable_layers<PrevLayer, Layer>
-constexpr auto make_complete_layer(Layer&& layer) {
+constexpr auto make_complete_layer(Layer&& layer) -> Layer {
   return std::forward<Layer>(layer);
 }
 
 template <complete_layer PrevLayer, incomplete_layer Layer>
-constexpr auto make_complete_layer(Layer&& layer) {
-  return std::forward<Layer>(layer).template make_complete_layer<PrevLayer>();
+constexpr auto make_complete_layer(Layer&& layer) -> complete_layer auto {
+  return make_complete_layer<PrevLayer>(
+      std::forward<Layer>(layer).template make_complete_layer<PrevLayer>());
 }
 
 template <class Tuple, layer Layer, layer... Layers>
@@ -54,8 +55,8 @@ constexpr auto connect_layers(Tuple&& tuple, Layer&& layer,
 template <complete_layer InputLayer, layer FirstLayer, layer... Layers>
   requires std::same_as<InputLayer, input_layer<typename InputLayer::real_type,
                                                 InputLayer::input_size>>
-constexpr auto connect_layers(const InputLayer& /*unused*/,
-                              FirstLayer&& first_layer, Layers&&... layers) {
+constexpr auto connect_layers(const InputLayer& /**/, FirstLayer&& first_layer,
+                              Layers&&... layers) {
   auto temp = std::tuple{detail::make_complete_layer<InputLayer>(
       std::forward<FirstLayer>(first_layer))};
 
