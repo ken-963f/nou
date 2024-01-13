@@ -42,11 +42,13 @@ class network final {
  public:
   // Member Type
   using size_type = std::size_t;
+
   using real_type = typename InputLayer::real_type;
 
   using layers_type =
       std::invoke_result_t<decltype(connect_layers<InputLayer, Layers...>),
                            InputLayer, Layers...>;
+
   using value_type = decltype(std::apply(
       [](auto&&... layers) { return std::tuple{layers.value()...}; },
       layers_type{}));
