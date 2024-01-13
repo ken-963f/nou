@@ -92,19 +92,18 @@ class network final {
 
   template <metric<output_type> Metric>
   [[nodiscard]] constexpr auto evaluate(input_type input, teacher_type teacher,
-                                        Metric&& metric) const
+                                        Metric metric) const
       -> std::expected<real_type, error> {
     return evaluate_(std::execution::seq, std::move(input), std::move(teacher),
-                     std::forward<Metric>(metric));
+                     metric);
   }
 
   template <metric<output_type> Metric>
   [[nodiscard]] auto evaluate(const execution_policy auto& policy,
                               input_type input, teacher_type teacher,
-                              Metric&& metric) const
+                              Metric metric) const
       -> std::expected<real_type, error> {
-    return evaluate_(policy, std::move(input), std::move(teacher),
-                     std::forward<Metric>(metric));
+    return evaluate_(policy, std::move(input), std::move(teacher), metric);
   }
 
   template <std::ranges::viewable_range BatchInput,
@@ -193,14 +192,12 @@ class network final {
   template <metric<output_type> Metric>
   constexpr auto evaluate_(const execution_policy auto& policy,
                            input_type input, teacher_type teacher,
-                           Metric&& metric) const
+                           Metric metric) const
       -> std::expected<real_type, error> {
     auto output = predict_<0>(policy, std::move(input));
-    return std::move(output).transform(
-        [metric = std::forward<Metric>(metric),
-         teacher = std::move(teacher)]<class T>(T&& output) {
-          return metric(std::forward<T>(output), teacher);
-        });
+    return std::move(output).transform([=]<class T>(T&& output) {
+      return metric(std::forward<T>(output), teacher);
+    });
   }
 
   template <std::ranges::viewable_range BatchInput,
@@ -245,14 +242,13 @@ class network final {
     requires(I < first_optimizable_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
                       typename layer_type<I>::input_type input,
-                      teacher_type teacher, LossFunction&& loss_function,
-                      Metric&& metric) const {
+                      teacher_type teacher, LossFunction loss_function,
+                      Metric metric) const {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
     return std::move(output).and_then([&]<class T>(T&& output) {
       return fit_<I + 1>(policy, std::forward<T>(output), std::move(teacher),
-                         std::forward<LossFunction>(loss_function),
-                         std::forward<Metric>(metric));
+                         loss_function, metric);
     });
   }
 
@@ -261,14 +257,13 @@ class network final {
     requires(I == first_optimizable_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
                       typename layer_type<I>::input_type input,
-                      teacher_type teacher, LossFunction&& loss_function,
-                      Metric&& metric) {
+                      teacher_type teacher, LossFunction loss_function,
+                      Metric metric) {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
     auto loss = output.and_then([&]<class T>(T& output) {
-      return fit_<I + 1>(policy, output, std::move(teacher),
-                         std::forward<LossFunction>(loss_function),
-                         std::forward<Metric>(metric));
+      return fit_<I + 1>(policy, output, std::move(teacher), loss_function,
+                         metric);
     });
     if (loss.has_value()) {
       layer<I>().add_gradient(policy, std::move(output.value()), loss.value());
@@ -281,14 +276,13 @@ class network final {
     requires(I > first_optimizable_layer_index && I < last_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
                       typename layer_type<I>::input_type input,
-                      teacher_type teacher, LossFunction&& loss_function,
-                      Metric&& metric) {
+                      teacher_type teacher, LossFunction loss_function,
+                      Metric metric) {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
     auto loss = output.and_then([&]<class T>(T& output) {
-      return fit_<I + 1>(policy, output, std::move(teacher),
-                         std::forward<LossFunction>(loss_function),
-                         std::forward<Metric>(metric));
+      return fit_<I + 1>(policy, output, std::move(teacher), loss_function,
+                         metric);
     });
     if (optimizable<layer_type<I>> && loss.has_value()) {
       layer<I>().add_gradient(policy, output.value(), loss.value());
@@ -304,20 +298,19 @@ class network final {
     requires(I == last_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
                       typename layer_type<I>::input_type input,
-                      teacher_type teacher, LossFunction&& loss_function,
-                      Metric&& metric) {
+                      teacher_type teacher, LossFunction loss_function,
+                      Metric metric) {
     auto output = transform_error_<I>(
         layer<I>().forward_propagate(policy, std::move(input)));
 
     if (output.has_value()) {
-      std::forward<Metric>(metric)(output.value(), teacher);
+      metric(output.value(), teacher);
     }
 
     auto loss = output.transform([&](auto& output) {
       typename layer_type<I>::output_type loss{};
       transform(policy, output, std::move(teacher), loss.begin(),
-                [loss_function = std::forward<LossFunction>(loss_function)](
-                    auto output, auto teacher) {
+                [=](auto output, auto teacher) {
                   return loss_function.df(output, teacher);
                 });
       return loss;

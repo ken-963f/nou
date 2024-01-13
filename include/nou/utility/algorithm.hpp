@@ -15,15 +15,15 @@ namespace nou {
 template <std::ranges::input_range R,
           std::invocable<std::ranges::range_value_t<R>> F>
 constexpr auto for_each(const std::execution::sequenced_policy& /**/, R&& r,
-                        F&& func) {
-  return std::ranges::for_each(std::forward<R>(r), std::forward<F>(func));
+                        F func) {
+  return std::ranges::for_each(std::forward<R>(r), func);
 }
 
 template <execution_policy P, std::ranges::random_access_range R,
           std::invocable<std::ranges::range_value_t<R>> F>
-auto for_each(const P& policy, R&& r, F&& func) {
+auto for_each(const P& policy, R&& r, F func) {
   return std::for_each(policy, std::ranges::begin(r), std::ranges::end(r),
-                       std::forward<F>(func));
+                       func);
 }
 
 template <std::ranges::input_range R1, std::ranges::input_range R2,
@@ -35,9 +35,9 @@ template <std::ranges::input_range R1, std::ranges::input_range R2,
       O, std::invoke_result_t<F, std::ranges::range_value_t<R1>,
                               std::ranges::range_value_t<R2>>>
 constexpr auto transform(const std::execution::sequenced_policy& /**/, R1&& r1,
-                         R2&& r2, O result, F&& func) {
+                         R2&& r2, O result, F func) {
   return std::ranges::transform(std::forward<R1>(r1), std::forward<R2>(r2),
-                                result, std::forward<F>(func));
+                                result, func);
 }
 
 template <execution_policy P, std::ranges::random_access_range R1,
@@ -48,9 +48,9 @@ template <execution_policy P, std::ranges::random_access_range R1,
   requires std::indirectly_writable<
       O, std::invoke_result_t<F, std::ranges::range_value_t<R1>,
                               std::ranges::range_value_t<R2>>>
-auto transform(const P& policy, R1&& r1, R2&& r2, O result, F&& func) {
+auto transform(const P& policy, R1&& r1, R2&& r2, O result, F func) {
   return std::transform(policy, std::ranges::begin(r1), std::ranges::end(r1),
-                        std::ranges::begin(r2), result, std::forward<F>(func));
+                        std::ranges::begin(r2), result, func);
 }
 
 template <execution_policy P, std::ranges::random_access_range R,
