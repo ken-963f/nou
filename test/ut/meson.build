@@ -6,6 +6,14 @@ test(
   )
 )
 
+# Core test
+test(
+  'ut_training_data_set',
+  executable(
+    'ut_training_data_set', 'core/training_data_set.cc', include_directories: inc_dir, dependencies: test_dep
+  )
+)
+
 # Layer test
 test(
   'ut_input_layer',

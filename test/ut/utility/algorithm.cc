@@ -63,4 +63,23 @@ auto main() -> int {
       expect(eq(result[1], expected[1]));
     } | parallels;
   };
+
+  "transform_reduce"_test = [&]() {
+    constexpr std::array test_value{1, 2};
+    constexpr int init = 1;
+    constexpr int expected = 4;
+
+    "sequenced"_test = [&]() {
+      constexpr auto result =
+          nou::transform_reduce(std::execution::seq, test_value, init,
+                                std::plus<>{}, [](auto i) { return i; });
+      static_assert(result == expected);
+    };
+
+    "parallel"_test = [&]<nou::execution_policy P>(const P& policy) {
+      auto result = nou::transform_reduce(
+          policy, test_value, init, std::plus<>{}, [](auto i) { return i; });
+      expect(eq(result, expected));
+    } | parallels;
+  };
 }

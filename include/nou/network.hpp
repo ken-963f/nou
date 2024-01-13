@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstddef>
 #include <expected>
+#include <functional>
 #include <ranges>
 #include <span>
 #include <tuple>
@@ -10,11 +11,13 @@
 #include <utility>
 
 #include "concepts/metric.hpp"
+#include "nou/concepts/callback.hpp"
 #include "nou/concepts/execution_policy.hpp"
 #include "nou/concepts/layer.hpp"
 #include "nou/concepts/loss_function.hpp"
 #include "nou/concepts/optimizable.hpp"
 #include "nou/core/error.hpp"
+#include "nou/core/training_data_set.hpp"
 #include "nou/layer/input_layer.hpp"
 #include "nou/utility/algorithm.hpp"
 #include "nou/utility/connect_layers.hpp"
@@ -106,46 +109,53 @@ class network final {
         });
   }
 
-  template <loss_function<real_type> LossFunction, metric<output_type> Metric>
-  auto fit(const execution_policy auto& policy, input_type input,
-           teacher_type teacher, LossFunction&& loss_function, Metric&& metric)
-      -> std::expected<real_type, error> {
-    real_type result{};
-    auto metric_function =
-        [&result, metic = std::forward<Metric>(metric)]<class T, class U>(
-            T&& output, U&& teacher) {
-          result = metic(std::forward<T>(output), std::forward<U>(teacher));
-        };
-    auto fit_result =
-        fit<0>(policy, std::move(input), std::move(teacher),
-               std::forward<LossFunction>(loss_function), metric_function);
-
-    if (fit_result.has_value()) {
-      apply_gradient(policy);
-    }
-
-    return fit_result.transform([&](auto&&) { return result; });
+  template <std::ranges::viewable_range BatchInput,
+            std::ranges::viewable_range BatchTeacher,
+            std::invocable<std::size_t, std::size_t> F,
+            loss_function<real_type> LossFunction, metric<output_type> Metric,
+            callback<real_type> Callback>
+  constexpr void fit(
+      const execution_policy auto& policy,
+      const training_data_set<BatchInput, BatchTeacher, F>& data_set,
+      LossFunction loss_function, Metric metric, Callback& callback,
+      size_type epoch) {
+    std::ranges::for_each(std::views::iota(0UZ, epoch), [&, this](auto index) {
+      for_each(policy, data_set.training_data(), [&, this](auto&& batch) {
+        auto result = transform_reduce(
+            policy, batch, real_type{}, std::plus<real_type>{},
+            [&, this](auto&& data) {
+              const auto& [input, teacher] = data;
+              real_type result{};
+              auto metric_function = [&]<class T, class U>(T&& output,
+                                                           U&& teacher) {
+                result =
+                    metric(std::forward<T>(output), std::forward<U>(teacher));
+              };
+              auto fit_result = fit<0>(policy, input.base(), teacher.base(),
+                                       loss_function, metric_function);
+              if (!fit_result.has_value()) [[unlikely]] {
+                callback.on_error(fit_result.error());
+                return real_type{};
+              }
+              return result;
+            });
+        apply_gradient(policy);
+        callback.on_batch_end(std::move(result));
+      });
+      callback.on_epoch_end(index);
+    });
   }
 
-  template <loss_function<real_type> LossFunction, metric<output_type> Metric>
-  constexpr auto fit(input_type input, teacher_type teacher,
-                     LossFunction&& loss_function, Metric&& metric)
-      -> std::expected<real_type, error> {
-    real_type result{};
-    auto metric_function =
-        [&result, metic = std::forward<Metric>(metric)]<class T, class U>(
-            T&& output, U&& teacher) {
-          result = metic(std::forward<T>(output), std::forward<U>(teacher));
-        };
-    auto fit_result =
-        fit<0>(std::execution::seq, std::move(input), std::move(teacher),
-               std::forward<LossFunction>(loss_function), metric_function);
-
-    if (fit_result.has_value()) {
-      apply_gradient(std::execution::seq);
-    }
-
-    return fit_result.transform([&](auto&&) { return result; });
+  template <std::ranges::viewable_range BatchInput,
+            std::ranges::viewable_range BatchTeacher,
+            std::invocable<std::size_t, std::size_t> F,
+            loss_function<real_type> LossFunction, metric<output_type> Metric,
+            callback<real_type> Callback>
+  constexpr void fit(
+      const training_data_set<BatchInput, BatchTeacher, F>& data_set,
+      LossFunction loss_function, Metric metric, Callback& callback,
+      size_type epoch) {
+    fit(std::execution::seq, data_set, loss_function, metric, callback, epoch);
   }
 
   // Getter/Setter

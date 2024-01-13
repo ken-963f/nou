@@ -12,6 +12,7 @@
 #include "boost/ut.hpp"
 #include "nou/concepts/execution_policy.hpp"
 #include "nou/core/error.hpp"
+#include "nou/core/training_data_set.hpp"
 #include "nou/layer/input_layer.hpp"
 
 namespace mock {
@@ -124,6 +125,17 @@ struct loss_function final {
       -> RealType {
     return output + teacher;
   }
+};
+
+template <std::floating_point RealType>
+struct callback final {
+  RealType metric{};
+  std::size_t epoch_sum{};
+  nou::error error{};
+
+  constexpr void on_batch_end(RealType x) noexcept { metric += x; }
+  constexpr void on_epoch_end(std::size_t x) noexcept { epoch_sum += x; }
+  constexpr void on_error(const nou::error& x) noexcept { error = x; }
 };
 
 }  // namespace mock
@@ -308,8 +320,14 @@ auto main() -> int {
   } | test_value;
 
   "fit"_test = [&]<std::floating_point RealType>() {
-    constexpr auto input = std::array{RealType{1.0}};
-    constexpr auto teacher = std::array{RealType{5.0}, RealType{}, RealType{}};
+    static constexpr std::array<std::array<RealType, 1>, 1> batch_input{
+        std::array{RealType{1.0}}};
+    static constexpr std::array<std::array<RealType, 3>, 1> batch_teacher{
+        std::array{RealType{5.0}, RealType{}, RealType{}}};
+
+    constexpr auto shuffule_func = [](auto /**/, auto /**/) { return 0UZ; };
+    constexpr nou::training_data_set data_set{batch_input, batch_teacher,
+                                              shuffule_func, 1UZ};
     constexpr mock::metric metric{};
     constexpr mock::loss_function loss_function{};
     constexpr auto network =
@@ -320,15 +338,16 @@ auto main() -> int {
     "sequenced execution"_test = [&]() {
       constexpr auto tuple = [&]() {
         auto network1 = nou::network(network);
-        auto value1 = network1.fit(input, teacher, loss_function, metric);
+        mock::callback<RealType> callback{};
+        network1.fit(data_set, loss_function, metric, callback, 1UZ);
+        auto value1 = callback.metric;
         auto value2 = network1.value();
         return std::tuple{value1, value2};
       }();
       constexpr auto value1 = std::get<0>(tuple);
       constexpr auto value2 = std::get<1>(tuple);
 
-      static_assert(value1.has_value());
-      static_assert(value1.value() == RealType{4.0 - 5.0});
+      static_assert(value1 == RealType{4.0 - 5.0});
 
       static_assert(std::get<0>(value2) ==
                     RealType{1.0 + (4.0 + 5.0) + 4.0 + 2.0});
@@ -339,14 +358,14 @@ auto main() -> int {
                                         nou::network(network)](auto&& policy) {
       auto [value1, value2] = [&]() {
         auto network1 = nou::network(network);
-        auto value1 =
-            network1.fit(policy, input, teacher, loss_function, metric);
+        mock::callback<RealType> callback{};
+        network1.fit(policy, data_set, loss_function, metric, callback, 1UZ);
+        auto value1 = callback.metric;
         auto value2 = network1.value();
         return std::tuple{value1, value2};
       }();
 
-      expect(value1.has_value());
-      expect(eq(value1.value(), RealType{4.0 - 5.0}));
+      expect(eq(value1, RealType{4.0 - 5.0}));
 
       expect(eq(std::get<0>(value2), RealType{1.0 + (4.0 + 5.0) + 4.0 + 2.0}));
       expect(eq(std::get<1>(value2), RealType{2.0 + (4.0 + 5.0) + 4.0}));
@@ -354,8 +373,14 @@ auto main() -> int {
   } | test_value;
 
   "fit error"_test = [&]<std::floating_point RealType>() {
-    constexpr auto input = std::array{RealType{1.0}};
-    constexpr auto teacher = std::array{RealType{5.0}, RealType{}, RealType{}};
+    static constexpr std::array<std::array<RealType, 1>, 1> batch_input{
+        std::array{RealType{1.0}}};
+    static constexpr std::array<std::array<RealType, 3>, 1> batch_teacher{
+        std::array{RealType{5.0}, RealType{}, RealType{}}};
+
+    constexpr auto shuffule_func = [](auto /**/, auto /**/) { return 0UZ; };
+    constexpr nou::training_data_set data_set{batch_input, batch_teacher,
+                                              shuffule_func, 1UZ};
     constexpr mock::metric metric{};
     constexpr mock::loss_function loss_function{};
 
@@ -368,16 +393,17 @@ auto main() -> int {
       "sequenced execution"_test = [&]() {
         constexpr auto tuple = [&]() {
           auto network1 = nou::network(network);
-          auto value1 = network1.fit(input, teacher, loss_function, metric);
+          mock::callback<RealType> callback{};
+          network1.fit(data_set, loss_function, metric, callback, 1UZ);
+          auto value1 = callback.error;
           auto value2 = network1.value();
           return std::tuple{value1, value2};
         }();
         constexpr auto value1 = std::get<0>(tuple);
         constexpr auto value2 = std::get<1>(tuple);
 
-        static_assert(!value1.has_value());
-        static_assert(value1.error().what == error_message);
-        static_assert(value1.error().layer_index == 0);
+        static_assert(value1.what == error_message);
+        static_assert(value1.layer_index == 0);
 
         static_assert(std::get<0>(value2) == RealType{1.0});
         static_assert(std::get<1>(value2) == RealType{2.0});
@@ -387,15 +413,15 @@ auto main() -> int {
                                       auto&& policy) {
         auto [value1, value2] = [&]() {
           auto network1 = nou::network(network);
-          auto value1 =
-              network1.fit(policy, input, teacher, loss_function, metric);
+          mock::callback<RealType> callback{};
+          network1.fit(policy, data_set, loss_function, metric, callback, 1UZ);
+          auto value1 = callback.error;
           auto value2 = network1.value();
           return std::tuple{value1, value2};
         }();
 
-        expect(!value1.has_value());
-        expect(eq(value1.error().what, error_message));
-        expect(eq(value1.error().layer_index, 0));
+        expect(eq(value1.what, error_message));
+        expect(eq(value1.layer_index, 0));
 
         expect(eq(std::get<0>(value2), RealType{1.0}));
         expect(eq(std::get<1>(value2), RealType{2.0}));
@@ -410,16 +436,17 @@ auto main() -> int {
       "sequenced execution"_test = [&]() {
         constexpr auto tuple = [&]() {
           auto network1 = nou::network(network);
-          auto value1 = network1.fit(input, teacher, loss_function, metric);
+          mock::callback<RealType> callback{};
+          network1.fit(data_set, loss_function, metric, callback, 1UZ);
+          auto value1 = callback.error;
           auto value2 = network1.value();
           return std::tuple{value1, value2};
         }();
         constexpr auto value1 = std::get<0>(tuple);
         constexpr auto value2 = std::get<1>(tuple);
 
-        static_assert(!value1.has_value());
-        static_assert(value1.error().what == error_message);
-        static_assert(value1.error().layer_index == 1);
+        static_assert(value1.what == error_message);
+        static_assert(value1.layer_index == 1);
 
         static_assert(std::get<0>(value2) == RealType{1.0});
         static_assert(std::get<1>(value2) == RealType{2.0});
@@ -429,15 +456,15 @@ auto main() -> int {
                                       auto&& policy) {
         auto [value1, value2] = [&]() {
           auto network1 = nou::network(network);
-          auto value1 =
-              network1.fit(policy, input, teacher, loss_function, metric);
+          mock::callback<RealType> callback{};
+          network1.fit(policy, data_set, loss_function, metric, callback, 1UZ);
+          auto value1 = callback.error;
           auto value2 = network1.value();
           return std::tuple{value1, value2};
         }();
 
-        expect(!value1.has_value());
-        expect(eq(value1.error().what, error_message));
-        expect(eq(value1.error().layer_index, 1));
+        expect(eq(value1.what, error_message));
+        expect(eq(value1.layer_index, 1));
 
         expect(eq(std::get<0>(value2), RealType{1.0}));
         expect(eq(std::get<1>(value2), RealType{2.0}));
