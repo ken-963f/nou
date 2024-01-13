@@ -174,12 +174,11 @@ class network final {
       };
 
   // Private Function
-  template <size_type I, std::ranges::random_access_range Input>
+  template <size_type I>
     requires(I <= last_layer_index)
   constexpr auto predict_(const execution_policy auto& policy,
-                          Input&& input) const {
-    auto result =
-        layer<I>().forward_propagate(policy, std::forward<Input>(input));
+                          typename layer_type<I>::input_type input) const {
+    auto result = layer<I>().forward_propagate(policy, std::move(input));
 
     if constexpr (I == last_layer_index) {
       return transform_error_<I>(result);
