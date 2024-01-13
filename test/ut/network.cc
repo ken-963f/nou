@@ -26,6 +26,8 @@ struct complete_layer final {
   using value_type = real_type;
   using input_type = std::span<const real_type, 1>;
   using output_type = std::array<real_type, 1>;
+  using backward_type = output_type;
+  using loss_type = output_type;
 
   // Static Member
   static constexpr size_type input_size = InputSize;
@@ -59,7 +61,7 @@ struct complete_layer final {
       const nou::execution_policy auto& /**/,
       std::span<const real_type, 1> output,
       std::span<const real_type, 1> loss) const noexcept
-      -> std::expected<output_type, nou::error> {
+      -> std::expected<backward_type, nou::error> {
     if (backward_propagation_error_.has_value()) {
       return backward_propagation_error_.value();
     } else {
