@@ -16,6 +16,7 @@
 #include "nou/concepts/layer.hpp"
 #include "nou/concepts/loss_function.hpp"
 #include "nou/concepts/optimizable.hpp"
+#include "nou/concepts/propagatable.hpp"
 #include "nou/core/error.hpp"
 #include "nou/core/training_data_set.hpp"
 #include "nou/layer/input_layer.hpp"
@@ -27,9 +28,16 @@ namespace nou {
 template <complete_layer InputLayer, layer... Layers>
   requires std::same_as<InputLayer, input_layer<typename InputLayer::real_type,
                                                 InputLayer::input_size>> &&
-           std::invocable<decltype(connect_layers<InputLayer, Layers...>),
-                          InputLayer, Layers...> &&
-           (sizeof...(Layers) >= 1)
+           (sizeof...(Layers) >= 1) &&
+           (sizeof...(Layers) == 1 ||
+            []<std::size_t _, std::size_t... I>(std::index_sequence<_, I...>) {
+              using layers_type = std::invoke_result_t<
+                  decltype(connect_layers<InputLayer, Layers...>), InputLayer,
+                  Layers...>;
+              return (propagatable<std::tuple_element_t<I - 1, layers_type>,
+                                   std::tuple_element_t<I, layers_type>> &&
+                      ...);
+            }(std::make_index_sequence<sizeof...(Layers)>{}))
 class network final {
  public:
   // Member Type
