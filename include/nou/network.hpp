@@ -225,7 +225,7 @@ class network final {
               };
               auto fit_result = fit_<0>(policy, input.base(), teacher.base(),
                                         loss_function, metric_function);
-              if (!fit_result.has_value()) [[unlikely]] {
+              if (!fit_result.has_value()) {
                 callback.on_error(fit_result.error());
                 return real_type{};
               }
