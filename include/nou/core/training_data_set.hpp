@@ -29,7 +29,8 @@ class training_data_set final {
         function_{std::move(func)},
         batch_size_{batch_size} {}
 
-  [[nodiscard]] constexpr auto training_data() const {
+  [[nodiscard]] constexpr auto training_data() const
+      -> std::ranges::random_access_range auto {
     auto data = [this]<std::size_t... I>(std::index_sequence<I...>) {
       return std::array{std::pair{std::views::all(input_[I]),
                                   std::views::all(teacher_[I])}...};

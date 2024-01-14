@@ -11,7 +11,8 @@ concept optimizable = requires(T t) {
   {
     t.add_gradient(std::execution::seq, typename T::output_type{},
                    typename T::output_type{})
-  };
-  { t.apply_gradient(std::execution::seq) };
+  } -> std::same_as<void>;
+  { t.apply_gradient(std::execution::seq) } -> std::same_as<void>;
 };
+
 }
