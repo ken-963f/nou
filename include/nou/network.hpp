@@ -20,6 +20,7 @@
 #include "nou/core/error.hpp"
 #include "nou/core/training_data_set.hpp"
 #include "nou/layer/input_layer.hpp"
+#include "nou/type_traits/to_span.hpp"
 #include "nou/utility/algorithm.hpp"
 #include "nou/utility/connect_layers.hpp"
 
@@ -28,16 +29,8 @@ namespace nou {
 template <complete_layer InputLayer, layer... Layers>
   requires std::same_as<InputLayer, input_layer<typename InputLayer::real_type,
                                                 InputLayer::input_size>> &&
-           (sizeof...(Layers) >= 1) &&
-           (sizeof...(Layers) == 1 ||
-            []<std::size_t _, std::size_t... I>(std::index_sequence<_, I...>) {
-              using layers_type = std::invoke_result_t<
-                  decltype(connect_layers<InputLayer, Layers...>), InputLayer,
-                  Layers...>;
-              return (propagatable<std::tuple_element_t<I - 1, layers_type>,
-                                   std::tuple_element_t<I, layers_type>> &&
-                      ...);
-            }(std::make_index_sequence<sizeof...(Layers)>{}))
+           std::invocable<decltype(connect_layers<InputLayer, Layers...>),
+                          InputLayer, Layers...>
 class network final {
  public:
   // Member Type
@@ -140,13 +133,13 @@ class network final {
   }
 
   template <size_type I>
-    requires(I <= last_layer_index)
+    requires(I <= last_layer_index) && propagatable<layer_type<I>>
   [[nodiscard]] constexpr auto layer() const noexcept -> const layer_type<I>& {
     return std::get<I>(layers_);
   }
 
   template <size_type I>
-    requires(I <= last_layer_index)
+    requires(I <= last_layer_index) && propagatable<layer_type<I>>
   [[nodiscard]] constexpr auto layer() noexcept -> layer_type<I>& {
     return std::get<I>(layers_);
   }
@@ -176,8 +169,9 @@ class network final {
   // Private Function
   template <size_type I>
     requires(I <= last_layer_index)
-  constexpr auto predict_(const execution_policy auto& policy,
-                          typename layer_type<I>::input_type input) const {
+  constexpr auto predict_(
+      const execution_policy auto& policy,
+      to_const_span_t<typename layer_type<I>::input_type> input) const {
     auto result = layer<I>().forward_propagate(policy, std::move(input));
 
     if constexpr (I == last_layer_index) {
@@ -242,7 +236,7 @@ class network final {
             std::invocable<output_type, teacher_type> Metric>
     requires(I < first_optimizable_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
-                      typename layer_type<I>::input_type input,
+                      to_const_span_t<typename layer_type<I>::input_type> input,
                       teacher_type teacher, LossFunction loss_function,
                       Metric metric) const {
     auto output = transform_error_<I>(
@@ -257,7 +251,7 @@ class network final {
             std::invocable<output_type, teacher_type> Metric>
     requires(I == first_optimizable_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
-                      typename layer_type<I>::input_type input,
+                      to_const_span_t<typename layer_type<I>::input_type> input,
                       teacher_type teacher, LossFunction loss_function,
                       Metric metric) {
     auto output = transform_error_<I>(
@@ -276,7 +270,7 @@ class network final {
             std::invocable<output_type, teacher_type> Metric>
     requires(I > first_optimizable_layer_index && I < last_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
-                      typename layer_type<I>::input_type input,
+                      to_const_span_t<typename layer_type<I>::input_type> input,
                       teacher_type teacher, LossFunction loss_function,
                       Metric metric) {
     auto output = transform_error_<I>(
@@ -298,7 +292,7 @@ class network final {
             std::invocable<output_type, teacher_type> Metric>
     requires(I == last_layer_index)
   constexpr auto fit_(const execution_policy auto& policy,
-                      typename layer_type<I>::input_type input,
+                      to_const_span_t<typename layer_type<I>::input_type> input,
                       teacher_type teacher, LossFunction loss_function,
                       Metric metric) {
     auto output = transform_error_<I>(

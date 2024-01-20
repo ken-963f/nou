@@ -24,7 +24,7 @@ struct complete_layer final {
   using real_type = RealType;
   using size_type = std::size_t;
   using value_type = real_type;
-  using input_type = std::span<const real_type, 1>;
+  using input_type = std::array<real_type, 1>;
   using output_type = std::array<real_type, 1>;
   using backward_type = output_type;
   using loss_type = output_type;
@@ -102,8 +102,8 @@ struct incomplete_layer final {
   // Public Functions
   template <nou::complete_layer PrevLayer>
   constexpr auto make_complete_layer() noexcept {
-    return complete_layer<typename PrevLayer::real_type, PrevLayer::output_size,
-                          OutputSize>{};
+    return ::mock::complete_layer<typename PrevLayer::real_type,
+                                  PrevLayer::output_size, OutputSize>{};
   }
 };
 
