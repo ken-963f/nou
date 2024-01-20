@@ -102,8 +102,8 @@ struct incomplete_layer final {
   // Public Functions
   template <nou::complete_layer PrevLayer>
   constexpr auto make_complete_layer() noexcept {
-    return ::mock::complete_layer<typename PrevLayer::real_type,
-                                  PrevLayer::output_size, OutputSize>{};
+    return complete_layer<typename PrevLayer::real_type, PrevLayer::output_size,
+                          OutputSize>{};
   }
 };
 
