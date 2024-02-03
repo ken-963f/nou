@@ -12,14 +12,38 @@
 #include "nou/concepts/optimizer.hpp"
 #include "nou/core/error.hpp"
 #include "nou/type_traits/empty_type.hpp"
+#include "nou/type_traits/size.hpp"
 #include "nou/type_traits/to_span.hpp"
 
 namespace nou {
 
+template <class... Ts>
+class neuron;
+
+template <activation_function ActivationFunction>
+class neuron<ActivationFunction> final {
+  template <std::size_t Size, std::floating_point RealType>
+  using complete_type =
+      neuron<size<Size>, RealType, ActivationFunction, empty_type>;
+};
+
+template <activation_function ActivationFunction, class IncompleteOptimizer>
+class neuron<ActivationFunction, IncompleteOptimizer> final {
+  template <std::size_t Size, std::floating_point RealType>
+  using complete_type =
+      neuron<size<Size>, RealType, ActivationFunction,
+             typename IncompleteOptimizer::template complete_type<RealType>>;
+};
+
 template <std::size_t Size, std::floating_point RealType,
-          activation_function ActivationFunction, class Optimizer = empty_type>
+          activation_function ActivationFunction>
+class neuron<size<Size>, RealType, ActivationFunction> final
+    : neuron<size<Size>, RealType, ActivationFunction, empty_type> {};
+
+template <std::size_t Size, std::floating_point RealType,
+          activation_function ActivationFunction, class Optimizer>
   requires optimizer<Optimizer> || std::same_as<Optimizer, empty_type>
-class neuron final {
+class neuron<size<Size>, RealType, ActivationFunction, Optimizer> {
  public:
   // Public types
   using size_type = std::size_t;

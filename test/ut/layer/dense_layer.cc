@@ -9,6 +9,7 @@
 
 #include "nou/concepts/execution_policy.hpp"
 #include "nou/concepts/optimizer.hpp"
+#include "nou/type_traits/size.hpp"
 #include "nou/type_traits/to_span.hpp"
 
 namespace mock {
@@ -25,30 +26,25 @@ struct activation_function final {
   }
 };
 
-template <class... Ts>
-struct optimizer;
-
-template <>
-struct optimizer<> final {
-  template <std::floating_point RealType>
-  using complete_type = optimizer<RealType>;
-};
-
 template <std::floating_point RealType>
-struct optimizer<RealType> final {
+struct optimizer final {
   using real_type = RealType;
-
   constexpr void add_gradient(const nou::execution_policy auto& _,
                               RealType x) noexcept {
     temp += x;
   }
 
   constexpr void apply_gradient() noexcept {
-    value = std::exchange(temp, real_type{});
+    value = std::exchange(temp, RealType{});
   }
 
   RealType value{};
   RealType temp{};
+};
+
+struct incomplete_optimizer final {
+  template <std::floating_point RealType>
+  using complete_type = optimizer<RealType>;
 };
 
 template <std::floating_point RealType>
@@ -65,9 +61,20 @@ struct prev_layer final {
   static constexpr size_type output_size = 1UZ;
 };
 
+template <class... Ts>
+struct node;
+
+template <class IncompleteOptimizer>
+struct node<IncompleteOptimizer> final {
+  template <std::size_t Size, std::floating_point RealType>
+  using complete_type =
+      node<nou::size<Size>, RealType,
+           typename IncompleteOptimizer::template complete_type<RealType>>;
+};
+
 template <std::size_t Size, std::floating_point RealType,
           nou::optimizer Optimizer>
-struct node final {
+struct node<nou::size<Size>, RealType, Optimizer> final {
   // Public types
   using real_type = RealType;
   using size_type = std::size_t;
@@ -117,28 +124,19 @@ auto main() -> int {
   constexpr std::tuple<float, double, long double> test_value = {};
 
   "default constructor"_test = []<std::floating_point RealType> {
-    static_assert(
-        std::is_nothrow_default_constructible_v<nou::dense_layer<
-            1UZ, mock::activation_function, mock::initializer<RealType>>>);
+    static_assert(std::is_nothrow_default_constructible_v<
+                  nou::dense_layer<1UZ, mock::node<mock::incomplete_optimizer>,
+                                   mock::initializer<RealType>>>);
     static_assert(
         std::is_nothrow_default_constructible_v<
-            typename nou::dense_layer<1UZ, mock::activation_function,
+            typename nou::dense_layer<1UZ,
+                                      mock::node<mock::incomplete_optimizer>,
                                       mock::initializer<RealType>>::
                 template complete_layer_type<mock::prev_layer<RealType>>>);
 
     static_assert(
         std::is_nothrow_default_constructible_v<
-            nou::dense_layer<1UZ, mock::activation_function,
-                             mock::initializer<RealType>, mock::optimizer<>>>);
-    static_assert(
-        std::is_nothrow_default_constructible_v<
-            typename nou::dense_layer<1UZ, mock::activation_function,
-                                      mock::initializer<RealType>,
-                                      mock::optimizer<>>::
-                template complete_layer_type<mock::prev_layer<RealType>>>);
-
-    static_assert(
-        std::is_nothrow_default_constructible_v<nou::dense_layer<
-            1UZ, mock::node<1UZ, RealType, mock::optimizer<RealType>>>>);
+            nou::dense_layer<1UZ, mock::node<nou::size<1UZ>, RealType,
+                                             mock::optimizer<RealType>>>>);
   } | test_value;
 }
