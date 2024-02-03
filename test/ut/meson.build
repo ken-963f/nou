@@ -14,11 +14,25 @@ test(
   )
 )
 
+test(
+  'ut_neuron_layer',
+  executable(
+    'ut_neuron_layer', 'core/neuron.cc', include_directories: inc_dir, dependencies: [test_dep, tbb_dep]
+  )
+)
+
 # Layer test
 test(
   'ut_input_layer',
   executable(
     'ut_input_layer', 'layer/input_layer.cc', include_directories: inc_dir, dependencies: test_dep
+  )
+)
+
+test(
+  'ut_dense_layer',
+  executable(
+    'ut_dense_layer', 'layer/dense_layer.cc', include_directories: inc_dir, dependencies: [test_dep, tbb_dep]
   )
 )
 
