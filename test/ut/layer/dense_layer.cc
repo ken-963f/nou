@@ -126,14 +126,15 @@ auto main() -> int {
                                       mock::initializer<RealType>>::
                 template complete_layer_type<mock::prev_layer<RealType>>>);
 
-    static_assert(std::is_nothrow_default_constructible_v<nou::dense_layer<
-                      1UZ, mock::activation_function,
-                      mock::initializer<RealType>, mock::optimizer<RealType>>>);
+    static_assert(
+        std::is_nothrow_default_constructible_v<
+            nou::dense_layer<1UZ, mock::activation_function,
+                             mock::initializer<RealType>, mock::optimizer<>>>);
     static_assert(
         std::is_nothrow_default_constructible_v<
             typename nou::dense_layer<1UZ, mock::activation_function,
                                       mock::initializer<RealType>,
-                                      mock::optimizer<RealType>>::
+                                      mock::optimizer<>>::
                 template complete_layer_type<mock::prev_layer<RealType>>>);
 
     static_assert(

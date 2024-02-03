@@ -11,13 +11,14 @@
 #include "nou/concepts/execution_policy.hpp"
 #include "nou/concepts/optimizer.hpp"
 #include "nou/core/error.hpp"
+#include "nou/type_traits/empty_type.hpp"
 #include "nou/type_traits/to_span.hpp"
 
 namespace nou {
 
 template <std::size_t Size, std::floating_point RealType,
-          activation_function ActivationFunction, optimizer... Optimizer>
-  requires(sizeof...(Optimizer) <= 1)
+          activation_function ActivationFunction, class Optimizer = empty_type>
+  requires optimizer<Optimizer> || std::same_as<Optimizer, empty_type>
 class neuron final {
  public:
   // Public types
@@ -35,12 +36,9 @@ class neuron final {
   using bias_type = real_type;
   using value_type = std::pair<weight_type, bias_type>;
 
-  struct empty_type {};
-  using optimizer_type =
-      std::tuple_element_t<sizeof...(Optimizer),
-                           std::tuple<empty_type, Optimizer...>>;
+  using optimizer_type = Optimizer;
   using optimizers_type = std::conditional_t<
-      sizeof...(Optimizer) == 0, empty_type,
+      std::same_as<optimizer_type, empty_type>, empty_type,
       std::pair<std::array<optimizer_type, Size>, optimizer_type>>;
 
   // Public static constants
