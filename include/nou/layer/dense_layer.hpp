@@ -48,7 +48,7 @@ class dense_layer<Size, ActivationFunction, Initializer, Optimizer...> final {
 };
 
 template <std::size_t Size, class Node>
-  requires /*propagatable<Node> &&*/ optimizable<Node>
+  requires propagatable<Node> && optimizable<Node>
 class dense_layer<Size, Node> final {
  public:
   // Public types
