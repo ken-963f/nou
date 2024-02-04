@@ -8,23 +8,12 @@
 #include <utility>
 
 #include "nou/concepts/execution_policy.hpp"
+#include "nou/concepts/initializer.hpp"
 #include "nou/concepts/optimizer.hpp"
 #include "nou/type_traits/size.hpp"
 #include "nou/type_traits/to_span.hpp"
 
 namespace mock {
-
-struct activation_function final {
-  template <std::floating_point RealType>
-  constexpr auto f(RealType x) const noexcept -> RealType {
-    return x * RealType{2.0};
-  }
-
-  template <std::floating_point RealType>
-  constexpr auto df(RealType x) const noexcept -> RealType {
-    return x * RealType{-2.0};
-  }
-};
 
 template <std::floating_point RealType>
 struct optimizer final {
@@ -88,6 +77,13 @@ struct node<nou::size<Size>, RealType, Optimizer> final {
   // Public static constants
   static constexpr size_type size = Size;
 
+  // Constructors
+  node() = default;
+
+  template <nou::initializer Initializer>
+  explicit constexpr node(Initializer initializer) noexcept
+      : value{initializer()} {}
+
   // Public Methods
   constexpr auto forward_propagate(const nou::execution_policy auto& _,
                                    nou::to_const_span_t<input_type> input)
@@ -138,5 +134,12 @@ auto main() -> int {
         std::is_nothrow_default_constructible_v<
             nou::dense_layer<1UZ, mock::node<nou::size<1UZ>, RealType,
                                              mock::optimizer<RealType>>>>);
+  } | test_value;
+
+  "make_complete_layer"_test = []<std::floating_point RealType> {
+    static_assert(
+        nou::dense_layer<1UZ, mock::node<mock::incomplete_optimizer>,
+                         mock::initializer<RealType>>::
+            template make_complete_layer<mock::prev_layer<RealType>>());
   } | test_value;
 }
